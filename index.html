@@ -253,10 +253,7 @@ html,body{height:100%;font-family:"Tajawal",sans-serif;background:var(--bg);colo
         <div class="line"></div><div class="diamond"></div><div class="line"></div>
       </div>
       <div class="hero-sub">نظام متابعة الحضور الميداني</div>
-      <div class="sync-badge">
-        <span class="sync-dot"></span>
-        <span id="sync-status-text">متصل بـ Google Sheets</span>
-      </div>
+
     </div>
   </div>
   <div class="landing-body">
@@ -661,6 +658,8 @@ function renderDaily(){
       dayoffBtn.style.background="linear-gradient(135deg,#7c3aed,#a855f7)";
     }
   }
+  // List
+  const list=document.getElementById("daily-list");list.innerHTML="";
   TEAM.forEach(m=>{
     const r=day[m.id];
     const c=document.createElement("div");
@@ -672,7 +671,7 @@ function renderDaily(){
       c.innerHTML=`<div class="att-ph">🏖️</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:#7c3aed">إجازة</div></div><span class="badge badge-v">إجازة</span><button class="vac-btn" style="margin-right:.4rem;color:var(--danger);border-color:#fecaca;background:#fff5f5" onclick="cancelVacation(${m.id},'${date}')">إلغاء</button>`;
     } else if(r&&r.time){
       c.className="att-card present";
-      c.innerHTML=`<img class="att-img" src="${r.photo}"><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time">🕐 ${r.time}</div><div class="att-loc">📍 ${r.city?r.city+' • ':''}${r.lat}${r.lng?', '+r.lng:''}</div></div><span class="badge badge-p">حضر ✓</span>`;
+      c.innerHTML=`<img class="att-img" src="${r.photo}"><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time">🕐 ${r.time}</div><div class="att-loc">📍 ${r.city?r.city+' • ':''}${r.lat}${r.lng?', '+r.lng:''}</div></div><span class="badge badge-p">حضر ✓</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button>`;
     } else {
       c.className="att-card absent";
       c.innerHTML=`<div class="att-ph">❓</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:var(--danger)">لم يسجل حضوره</div></div><span class="badge badge-a">غائب</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button>`;
