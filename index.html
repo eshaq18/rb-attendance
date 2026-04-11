@@ -46,9 +46,9 @@ html,body{height:100%;font-family:"Tajawal",sans-serif;background:var(--bg);colo
 @keyframes fadeUp{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
 
 /* ── DATETIME WIDGET ── */
-.datetime-widget{position:absolute;top:1rem;left:1rem;z-index:4;background:rgba(255,255,255,.88);backdrop-filter:blur(8px);border-radius:16px;padding:.55rem 1rem;border:1px solid rgba(45,68,150,.1);box-shadow:0 4px 16px rgba(26,45,110,.1);animation:fadeUp .6s ease .1s both;text-align:right;}
-.datetime-time{font-size:1.35rem;font-weight:900;color:var(--navy);line-height:1.1;letter-spacing:.02em;font-family:"Tajawal",sans-serif;}
-.datetime-date{font-size:.68rem;color:var(--muted);font-weight:600;margin-top:.1rem;white-space:nowrap;}
+.datetime-widget{position:absolute;top:.7rem;left:.7rem;z-index:4;background:rgba(255,255,255,.88);backdrop-filter:blur(8px);border-radius:12px;padding:.35rem .7rem;border:1px solid rgba(45,68,150,.1);box-shadow:0 4px 16px rgba(26,45,110,.1);animation:fadeUp .6s ease .1s both;text-align:right;}
+.datetime-time{font-size:.95rem;font-weight:900;color:var(--navy);line-height:1.1;letter-spacing:.02em;font-family:"Tajawal",sans-serif;}
+.datetime-date{font-size:.58rem;color:var(--muted);font-weight:600;margin-top:.05rem;white-space:nowrap;}
 
 
 .sync-badge{display:flex;align-items:center;gap:.4rem;margin-top:.9rem;background:rgba(255,255,255,.85);backdrop-filter:blur(4px);border-radius:20px;padding:.3rem .9rem;font-size:.72rem;font-weight:700;color:var(--navy);animation:fadeUp .6s ease .4s both;border:1px solid rgba(45,68,150,.12);}
@@ -455,7 +455,7 @@ const TEAM=[
   {id:4,name:"اسحاق السيهاتي",color:"#2d4496",emoji:"👷"}
 ];
 const PIN = "059805";
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxpAscIbEsRQhlamuYnPBvUInLcS1p7o93Y8eNo7VPwjjLWhiRTRbxVvZoDJRNsEbZvtg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyoWyGr_gPANo7tHRzDnhQCU9-b2MOhruEP0clarfIl9jkBuBFo1nE7mFF5xp9JzrjhYA/exec";
 
 // ═══ FIREBASE CONFIG ═══
 const FIREBASE_DB = "https://rb-attendance-2e9b3-default-rtdb.firebaseio.com";
@@ -811,7 +811,7 @@ async function renderDaily(){
       const localPhoto=localData[m.id]&&localData[m.id].photo;
       c.className="att-card present";
       const photoSrc=r.photo||localPhoto||"";
-      c.innerHTML=`${photoSrc?`<img class="att-img" src="${photoSrc}" onclick="openPhoto('${photoSrc}')" style="cursor:pointer">`:`<div class="att-ph">✓</div>`}<div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time">🕐 ${r.time}</div><div class="att-loc">📍 ${r.city?r.city+' • ':''}${r.lat||''}${r.lng?', '+r.lng:''}</div></div><span class="badge badge-p">حضر ✓</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button>`;
+      c.innerHTML=`${photoSrc?`<img class="att-img" src="${photoSrc}" onclick="openPhoto('${photoSrc}')" style="cursor:pointer">`:`<div class="att-ph">✓</div>`}<div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time">🕐 ${r.time}</div><div class="att-loc">📍 ${r.city?r.city+' • ':''}${r.lat||''}${r.lng?', '+r.lng:''}</div></div><span class="badge badge-p">حضر ✓</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button><button class="vac-btn" style="color:var(--danger);border-color:#fecaca;background:#fff5f5;margin-right:.3rem" onclick="deleteMemberAttendance(${m.id},'${date}')">🗑️</button>`;
       // جلب الصورة من Firebase إذا ما كانت موجودة
       if(!photoSrc){
         getPhotoFromFirebase(date, m.id).then(fbPhoto=>{
@@ -959,8 +959,22 @@ function clearDailyAttendance(){
   if(!confirm(`⚠️ هل أنت متأكد من مسح حضور يوم ${date}؟`))return;
   const data=getData();
   if(data[date]){delete data[date];saveData(data);}
+  // مسح من Sheets
+  pushToSheets({action:"deleteDay",date});
   renderDaily();
   showToast("✅ تم مسح حضور اليوم","ok");
+}
+
+async function deleteMemberAttendance(memberId, date){
+  const m=TEAM.find(x=>x.id===memberId);
+  if(!confirm(`مسح حضور ${m.name} ليوم ${date}؟`))return;
+  // مسح من localStorage
+  const data=getData();
+  if(data[date]&&data[date][memberId]){delete data[date][memberId];saveData(data);}
+  // مسح من Sheets
+  await pushToSheets({action:"deleteMember",date,name:m.name});
+  renderDaily();
+  showToast(`✅ تم مسح حضور ${m.name}`,"ok");
 }
 
 function openPhoto(src){
