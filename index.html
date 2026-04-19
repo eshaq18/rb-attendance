@@ -225,8 +225,25 @@ html,body{height:100%;font-family:"Tajawal",sans-serif;background:var(--bg);colo
 .cell-p{color:var(--success);font-weight:800;}.cell-a{color:var(--danger);opacity:.45;font-size:.7rem;}.cell-v{color:#7c3aed;font-weight:800;}
 .badge-v{background:rgba(124,58,237,.12);color:#7c3aed;}
 .att-card.vacation{border-right:4px solid #7c3aed;opacity:.85;}
+.att-card.absent-card{border-right:4px solid #dc2626;opacity:.9;}
 .vac-btn{padding:.32rem .72rem;border-radius:10px;border:1.5px solid #ddd6fe;background:#faf5ff;color:#7c3aed;font-family:"Tajawal",sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0;}
 .vac-btn:hover{background:#ede9fe;border-color:#7c3aed;}
+
+/* ── SITE INFO CARD (landing) ── */
+.site-info-card{background:white;border:1.5px solid var(--border);border-radius:18px;padding:1rem 1.3rem;display:flex;align-items:center;gap:.9rem;cursor:pointer;transition:all .2s;box-shadow:0 2px 10px rgba(26,45,110,.06);}
+.site-info-card:hover{border-color:var(--blue);transform:translateY(-2px);}
+.sic-icon{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,#dcfce7,#bbf7d0);display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+.sic-text{flex:1;}
+.sic-title{font-size:.9rem;font-weight:800;color:var(--navy);}
+.sic-sub{font-size:.72rem;color:var(--muted);margin-top:.15rem;}
+.sic-time{font-size:.88rem;font-weight:900;color:var(--navy);margin-left:.5rem;white-space:nowrap;}
+
+/* ── MANAGER SITE INFO FORM ── */
+.site-form{background:white;border:1.5px solid var(--border);border-radius:18px;padding:1.2rem;margin-bottom:1.2rem;box-shadow:var(--sh);}
+.site-form-title{font-size:.85rem;font-weight:800;color:var(--navy);margin-bottom:.8rem;display:flex;align-items:center;gap:.4rem;}
+.site-inp{width:100%;padding:.7rem 1rem;border:1.5px solid var(--border);border-radius:12px;font-family:"Tajawal",sans-serif;font-size:.88rem;color:var(--text);margin-bottom:.6rem;background:#f8faff;}
+.site-inp:focus{outline:none;border-color:var(--blue);}
+.site-save-btn{width:100%;padding:.75rem;border:none;border-radius:12px;background:linear-gradient(135deg,var(--navy),var(--blue2));color:white;font-family:"Tajawal",sans-serif;font-size:.9rem;font-weight:800;cursor:pointer;}
 .day-off-btn{width:100%;padding:.9rem;background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;border-radius:14px;color:white;font-family:"Tajawal",sans-serif;font-size:.92rem;font-weight:800;cursor:pointer;margin-top:.8rem;transition:all .2s;box-shadow:0 4px 14px rgba(124,58,237,.28);display:flex;align-items:center;justify-content:center;gap:.5rem;}
 .day-off-btn:hover{transform:translateY(-2px);opacity:.92;}
 .cell-name{text-align:right;font-weight:800;color:var(--navy);padding-right:1rem;white-space:nowrap;}
@@ -286,6 +303,15 @@ html,body{height:100%;font-family:"Tajawal",sans-serif;background:var(--bg);colo
         <div class="action-desc">التقارير</div>
       </div>
       <div class="action-arrow">←</div>
+    </div>
+    <!-- #5 بطاقة الموقع والوقت — دائماً ظاهرة -->
+    <div class="site-info-card" id="site-info-card" onclick="openSiteMap()">
+      <div class="sic-icon">📍</div>
+      <div class="sic-text">
+        <div class="sic-title" id="sic-title">موقع الدوام</div>
+        <div class="sic-sub" id="sic-sub">لا توجد معلومات للموقع</div>
+      </div>
+      <div class="sic-time" id="sic-time-display"></div>
     </div>
   </div>
   <div class="sig-wrap">
@@ -420,6 +446,17 @@ html,body{height:100%;font-family:"Tajawal",sans-serif;background:var(--bg);colo
       </div>
     </div>
 
+    <!-- #5 إعدادات الموقع والوقت -->
+    <div class="site-form">
+      <div class="site-form-title">📍 إعدادات الموقع وساعة الدوام</div>
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:.7rem;">⚠️ تُحذف تلقائياً كل يوم جديد</div>
+      <input class="site-inp" id="inp-map-url" placeholder="رابط Google Maps للموقع (https://maps.google.com/...)" type="url">
+      <input class="site-inp" id="inp-work-time" placeholder="وقت الدوام (مثال: 7:30 ص — 3:30 م)" type="text">
+      <button class="site-save-btn" onclick="saveSiteInfo()">💾 حفظ الموقع والوقت</button>
+    </div>
+
+
+
     <div class="tab-bar">
       <button class="tab-btn active" onclick="switchTab('daily',this)">📅 يومي</button>
       <button class="tab-btn" onclick="switchTab('monthly',this)">📆 شهري</button>
@@ -461,19 +498,83 @@ const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyoWyGr_gPANo7tHRzDn
 const FIREBASE_DB = "https://rb-attendance-2e9b3-default-rtdb.firebaseio.com";
 
 async function savePhotoToFirebase(date, memberId, photoBase64){
-  try{
-    const url=`${FIREBASE_DB}/photos/${date}/${memberId}.json`;
-    await fetch(url,{method:"PUT",body:JSON.stringify(photoBase64)});
-  }catch(e){console.log("Firebase photo save error:",e);}
+  try{const url=`${FIREBASE_DB}/photos/${date}/${memberId}.json`;await fetch(url,{method:"PUT",body:JSON.stringify(photoBase64)});}catch(e){}
+}
+async function getPhotoFromFirebase(date, memberId){
+  try{const url=`${FIREBASE_DB}/photos/${date}/${memberId}.json`;const res=await fetch(url);const data=await res.json();return data||null;}catch(e){return null;}
 }
 
-async function getPhotoFromFirebase(date, memberId){
+// ═══ #5 معلومات الموقع والوقت ═══
+let siteInfo = {mapUrl:'', workTime:''};
+
+async function loadSiteInfo(){
+  // فحص هل تم الحذف اليومي
+  const savedDate = localStorage.getItem("rbco_site_date");
+  const today = todayStr();
+  if(savedDate !== today){
+    // يوم جديد → احذف المعلومات المحلية
+    localStorage.removeItem("rbco_site_date");
+    localStorage.removeItem("rbco_site_cache");
+    // أرسل حذف للسيرفر
+    pushToSheets({action:"saveSiteInfo", mapUrl:"", workTime:""}).catch(()=>{});
+    updateSiteCard("","");
+    return;
+  }
+
+  // إذا نفس اليوم → جلب من السيرفر
   try{
-    const url=`${FIREBASE_DB}/photos/${date}/${memberId}.json`;
-    const res=await fetch(url);
-    const data=await res.json();
-    return data||null;
-  }catch(e){return null;}
+    const res=await fetch(SCRIPT_URL+"?action=getSiteInfo");
+    const j=await res.json();
+    if(j.status==='ok'){
+      siteInfo.mapUrl=j.mapUrl||'';
+      siteInfo.workTime=j.workTime||'';
+      updateSiteCard(siteInfo.mapUrl, siteInfo.workTime);
+      if(document.getElementById("inp-map-url")) document.getElementById("inp-map-url").value=siteInfo.mapUrl;
+      if(document.getElementById("inp-work-time")) document.getElementById("inp-work-time").value=siteInfo.workTime;
+    }
+  }catch(e){}
+}
+
+function updateSiteCard(mapUrl, workTime){
+  const sub=document.getElementById("sic-sub");
+  const timeEl=document.getElementById("sic-time-display");
+  const card=document.getElementById("site-info-card");
+  if(!sub) return;
+  if(!mapUrl && !workTime){
+    sub.textContent="لا توجد معلومات للموقع";
+    timeEl.textContent="";
+    card.style.opacity="0.6";
+  } else {
+    sub.textContent=workTime||"اضغط لفتح الخريطة";
+    timeEl.textContent=workTime?"⏰ "+workTime:"";
+    card.style.opacity="1";
+  }
+}
+
+function openSiteMap(){
+  if(siteInfo.mapUrl) window.open(siteInfo.mapUrl,'_blank');
+  else showToast("لم يتم تحديد رابط الخريطة بعد","warn");
+}
+
+async function saveSiteInfo(){
+  const mapUrl=document.getElementById("inp-map-url").value.trim();
+  const workTime=document.getElementById("inp-work-time").value.trim();
+  const result=await pushToSheets({action:"saveSiteInfo",mapUrl,workTime});
+  if(result.ok){
+    siteInfo.mapUrl=mapUrl; siteInfo.workTime=workTime;
+    // حفظ تاريخ اليوم محلياً
+    localStorage.setItem("rbco_site_date", todayStr());
+    localStorage.setItem("rbco_site_cache", JSON.stringify({mapUrl,workTime}));
+    updateSiteCard(mapUrl, workTime);
+    showToast("✅ تم حفظ الموقع والوقت","ok");
+  } else { showToast("❌ فشل الحفظ","err"); }
+}
+
+function saveEmail2(){
+  const email2=document.getElementById("inp-email2").value.trim();
+  if(email2) localStorage.setItem("rbco_email2", email2);
+  else localStorage.removeItem("rbco_email2");
+  showToast("✅ تم حفظ الإيميل","ok");
 }
 
 // ═══ PIN ═══
@@ -502,7 +603,15 @@ function submitPin(){
 // ═══ NAV ═══
 function goPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));document.getElementById(id).classList.add("active");}
 function goCheckin(){goPage("page-checkin");buildNameGrid();resetCheckinUI();getLocation();}
-function openManager(){goPage("page-manager");document.getElementById("daily-date").value=todayStr();document.getElementById("monthly-month").value=todayStr().slice(0,7);renderDaily();}
+function openManager(){
+  goPage("page-manager");
+  document.getElementById("daily-date").value=todayStr();
+  document.getElementById("monthly-month").value=todayStr().slice(0,7);
+  document.getElementById("inp-map-url").value=siteInfo.mapUrl||'';
+  document.getElementById("inp-work-time").value=siteInfo.workTime||'';
+  document.getElementById("inp-email2").value=localStorage.getItem("rbco_email2")||'';
+  renderDaily();
+}
 
 // ═══ DATA ═══
 function getData(){try{return JSON.parse(localStorage.getItem("rbco_v4")||"{}");}catch{return{};}}
@@ -804,26 +913,29 @@ async function renderDaily(){
       c.innerHTML=`<div class="att-ph">🚫</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:#7c3aed">لا يوجد دوام</div></div><span class="badge badge-v">لا دوام</span>`;
     } else if(r&&r.status==="vacation"){
       c.className="att-card vacation";
-      c.innerHTML=`<div class="att-ph">🏖️</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:#7c3aed">إجازة</div></div><span class="badge badge-v">إجازة</span><button class="vac-btn" style="margin-right:.4rem;color:var(--danger);border-color:#fecaca;background:#fff5f5" onclick="cancelVacation(${m.id},'${date}')">إلغاء</button>`;
+      // #2 عدد أيام الإجازة
+      const vacDays=countVacationDays(m.id, date);
+      const vacLabel=vacDays>0?` (${vacDays} أيام إجازة)`:'';
+      c.innerHTML=`<div class="att-ph">🏖️</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:#7c3aed">إجازة${vacLabel}</div></div><span class="badge badge-v">إجازة</span><button class="vac-btn" style="margin-right:.4rem;color:var(--danger);border-color:#fecaca;background:#fff5f5" onclick="cancelVacation(${m.id},'${date}')">إلغاء</button>`;
     } else if(r&&r.time){
-      // جلب الصورة من Firebase أو localStorage
       const localData=getData()[date]||{};
       const localPhoto=localData[m.id]&&localData[m.id].photo;
       c.className="att-card present";
       const photoSrc=r.photo||localPhoto||"";
-      c.innerHTML=`${photoSrc?`<img class="att-img" src="${photoSrc}" onclick="openPhoto('${photoSrc}')" style="cursor:pointer">`:`<div class="att-ph">✓</div>`}<div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time">🕐 ${r.time}</div><div class="att-loc">📍 ${r.city?r.city+' • ':''}${r.lat||''}${r.lng?', '+r.lng:''}</div></div><span class="badge badge-p">حضر ✓</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button><button class="vac-btn" style="color:var(--danger);border-color:#fecaca;background:#fff5f5;margin-right:.3rem" onclick="deleteMemberAttendance(${m.id},'${date}')">🗑️</button>`;
-      // جلب الصورة من Firebase إذا ما كانت موجودة
+      // #6 تفاصيل أكثر للموقع والوقت
+      const locDetail=buildLocDetail(r);
+      c.innerHTML=`${photoSrc?`<img class="att-img" src="${photoSrc}" onclick="openPhoto('${photoSrc}')" style="cursor:pointer">`:`<div class="att-ph">✓</div>`}<div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time">🕐 ${r.time}</div>${locDetail}</div><span class="badge badge-p">حضر ✓</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button><button class="vac-btn" style="color:var(--danger);border-color:#fecaca;background:#fff5f5;margin-right:.3rem" onclick="deleteMemberAttendance(${m.id},'${date}')">🗑️</button>`;
       if(!photoSrc){
         getPhotoFromFirebase(date, m.id).then(fbPhoto=>{
-          if(fbPhoto){
-            const img=c.querySelector('.att-ph');
-            if(img) img.outerHTML=`<img class="att-img" src="${fbPhoto}" onclick="openPhoto('${fbPhoto}')" style="cursor:pointer">`;
-          }
+          if(fbPhoto){const img=c.querySelector('.att-ph');if(img)img.outerHTML=`<img class="att-img" src="${fbPhoto}" onclick="openPhoto('${fbPhoto}')" style="cursor:pointer">`;}
         });
       }
     } else {
-      c.className="att-card absent";
-      c.innerHTML=`<div class="att-ph">❓</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:var(--danger)">لم يسجل حضوره</div></div><span class="badge badge-a">غائب</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button>`;
+      // #3 غائب مع علامة واضحة
+      c.className="att-card absent-card";
+      c.innerHTML=`<div class="att-ph" style="background:#fef2f2;border-color:#fca5a5;color:#dc2626;font-size:1.3rem">❌</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:var(--danger);font-weight:800">غائب</div></div><span class="badge badge-a">غائب ❌</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button>`;
+      // #3 تسجيل الغياب في Sheets تلقائياً عند التحميل إذا كان اليوم قد مضى
+      if(date < todayStr()) pushToSheets({action:"absent",date,name:m.name}).catch(()=>{});
     }
     list.appendChild(c);
   });
@@ -858,19 +970,20 @@ async function renderMonthly(){
     });
   }
 
-  let html=`<table class="month-tbl"><thead><tr><th>الاسم</th>${Array.from({length:days},(_,i)=>`<th>${i+1}</th>`).join("")}<th>حضر</th></tr></thead><tbody>`;
+  let html=`<table class="month-tbl"><thead><tr><th>الاسم</th>${Array.from({length:days},(_,i)=>`<th>${i+1}</th>`).join("")}<th>حضر</th><th>إجازة</th><th>غائب</th></tr></thead><tbody>`;
   TEAM.forEach(m=>{
-    let count=0;
+    let pCount=0, vCount=0, abCount=0;
     html+=`<tr><td class="cell-name">${m.emoji} ${m.name}</td>`;
     for(let d=1;d<=days;d++){
       const str=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const r=map[str]&&map[str][m.name];
       if(r&&r.status==='لا يوجد دوام') html+=`<td class="cell-v" title="${r.reason||'لا دوام'}">🚫</td>`;
-      else if(r&&r.status==='إجازة') html+=`<td class="cell-v" title="إجازة">🏖️</td>`;
-      else if(r&&r.status==='حضر'){count++;html+=`<td class="cell-p" title="${r.time||''}">✓</td>`;}
+      else if(r&&r.status==='إجازة'){vCount++;html+=`<td class="cell-v" title="إجازة">🏖️</td>`;}
+      else if(r&&r.status==='حضر'){pCount++;html+=`<td class="cell-p" title="${r.time||''}">✓</td>`;}
+      else if(r&&r.status==='غائب'){abCount++;html+=`<td style="color:#dc2626;font-weight:900" title="غائب">❌</td>`;}
       else html+=`<td class="cell-a">-</td>`;
     }
-    html+=`<td style="font-weight:900;color:var(--navy)">${count}</td></tr>`;
+    html+=`<td style="font-weight:900;color:var(--success)">${pCount}</td><td style="font-weight:900;color:#7c3aed">${vCount}</td><td style="font-weight:900;color:var(--danger)">${abCount}</td></tr>`;
   });
   document.getElementById("monthly-table").innerHTML=html+"</tbody></table>";
 }
@@ -878,9 +991,10 @@ async function renderMonthly(){
 function exportExcel(){
   const month=document.getElementById("monthly-month").value;if(!month)return;
   const [y,mo]=month.split("-").map(Number),days=new Date(y,mo,0).getDate(),data=getData(),wb=XLSX.utils.book_new();
-  const rows=[["الاسم",...Array.from({length:days},(_,i)=>String(i+1)),"حضر","إجازة","لا دوام"]];
+  // ملخص
+  const rows=[["الاسم",...Array.from({length:days},(_,i)=>String(i+1)),"حضر","إجازة","غائب","لا دوام"]];
   TEAM.forEach(m=>{
-    let row=[m.name],p=0,vac=0,nw=0;
+    let row=[m.name],p=0,vac=0,ab=0,nw=0;
     for(let d=1;d<=days;d++){
       const str=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const day=data[str]||{};
@@ -889,21 +1003,23 @@ function exportExcel(){
       if(noWork){row.push("لا دوام");nw++;}
       else if(r&&r.status==="vacation"){row.push("إجازة");vac++;}
       else if(r&&r.time){row.push(r.time);p++;}
-      else row.push("-");
+      else if(r&&r.status==="absent"){row.push("غائب");ab++;}
+      else{row.push("-");}
     }
-    row.push(p,vac,nw);rows.push(row);
+    row.push(p,vac,ab,nw);rows.push(row);
   });
+  // تفاصيل
   const dr=[["الاسم","التاريخ","الحالة","الوقت","المدينة","خط العرض","خط الطول","ملاحظة"]];
   Object.keys(data).filter(d=>d.startsWith(month)).sort().forEach(date=>{
     const day=data[date]||{};
     const noWork=day.__nowork__;
-    if(noWork){
-      TEAM.forEach(m=>dr.push([m.name,date,"لا يوجد دوام","","","","",noWork.reason||""]));
-    } else {
+    if(noWork){TEAM.forEach(m=>dr.push([m.name,date,"لا يوجد دوام","","","","",noWork.reason||""]));}
+    else{
       TEAM.forEach(m=>{
         const r=day[m.id];
         if(r&&r.status==="vacation") dr.push([m.name,date,"إجازة","","","","",""]);
         else if(r&&r.time) dr.push([m.name,date,"حضر",r.time,r.city||"",r.lat,r.lng,""]);
+        else dr.push([m.name,date,"غائب","","","","",""]);
       });
     }
   });
@@ -985,6 +1101,32 @@ function closePhoto(){
   document.getElementById("photo-modal").classList.remove("open");
 }
 
+// ═══ HELPER FUNCTIONS ═══
+
+// #2 عدد أيام الإجازة للشخص في الشهر الحالي
+function countVacationDays(memberId, currentDate){
+  const data=getData();
+  const month=currentDate.slice(0,7);
+  let count=0;
+  Object.keys(data).filter(d=>d.startsWith(month)&&d<=currentDate).forEach(d=>{
+    const r=data[d]&&data[d][memberId];
+    if(r&&r.status==="vacation") count++;
+  });
+  return count;
+}
+
+// #6 بناء تفاصيل الموقع والوقت
+function buildLocDetail(r){
+  const parts=[];
+  if(r.city) parts.push(`📍 ${r.city}`);
+  if(r.lat&&r.lng){
+    const mapsUrl=`https://maps.google.com/?q=${r.lat},${r.lng}`;
+    parts.push(`<a href="${mapsUrl}" target="_blank" style="color:var(--blue2);text-decoration:none;font-size:.66rem">🗺️ ${r.lat}, ${r.lng}</a>`);
+  }
+  if(r.accuracy) parts.push(`<span style="color:var(--muted);font-size:.66rem">دقة ±${r.accuracy}م</span>`);
+  return parts.length?`<div class="att-loc">${parts.join(' • ')}</div>`:'';
+}
+
 function showToast(msg,type=""){const t=document.getElementById("toast");t.textContent=msg;t.className="toast show"+(type?" "+type:"");setTimeout(()=>t.classList.remove("show"),3500);}
 
 // ═══ LIVE CLOCK ═══
@@ -1006,6 +1148,8 @@ setInterval(updateClock,1000);
 document.addEventListener("DOMContentLoaded",()=>{
   document.getElementById("daily-date").value=todayStr();
   document.getElementById("monthly-month").value=todayStr().slice(0,7);
+  // تحميل معلومات الموقع
+  loadSiteInfo();
 });
 </script>
 </body>
