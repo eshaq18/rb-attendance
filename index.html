@@ -1003,8 +1003,13 @@ async function renderMonthly(){
       if(r&&r.status==='لا يوجد دوام') html+=`<td class="cell-v" title="${r.reason||'لا دوام'}">🚫</td>`;
       else if(r&&r.status==='إجازة'){vCount++;html+=`<td class="cell-v" title="إجازة">🏖️</td>`;}
       else if(r&&r.status==='حضر'){pCount++;html+=`<td class="cell-p" title="${r.time||''}">✓</td>`;}
-      else if(r&&r.status==='غائب'){abCount++;html+=`<td style="color:#dc2626;font-weight:900" title="غائب">❌</td>`;}
-      else html+=`<td class="cell-a">-</td>`;
+      else if(r&&r.status==='غائب'){abCount++;html+=`<td style="color:#dc2626;font-weight:900;font-size:.8rem" title="غائب">✕</td>`;}
+      else {
+        // يوم مضى ولم يسجل → غائب
+        const cellDate=str;
+        if(cellDate < todayStr()){abCount++;html+=`<td style="color:#dc2626;font-weight:900;font-size:.8rem" title="غائب">✕</td>`;}
+        else html+=`<td class="cell-a">-</td>`;
+      }
     }
     html+=`<td style="font-weight:900;color:var(--success)">${pCount}</td><td style="font-weight:900;color:#7c3aed">${vCount}</td><td style="font-weight:900;color:var(--danger)">${abCount}</td></tr>`;
   });
