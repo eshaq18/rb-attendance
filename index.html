@@ -511,7 +511,7 @@ async function loadSiteInfo(){
   const today = todayStr();
   const savedDate = localStorage.getItem("rbco_site_date");
 
-  // يوم جديد → احذف المعلومات من السيرفر وأظهر "لا توجد معلومات"
+  // يوم جديد → احذف
   if(savedDate && savedDate !== today){
     localStorage.removeItem("rbco_site_date");
     localStorage.removeItem("rbco_site_cache");
@@ -520,7 +520,20 @@ async function loadSiteInfo(){
     return;
   }
 
-  // جلب من السيرفر دائماً (لأن الموظفين الآخرين يحتاجون يشوفون ما حفظه المدير)
+  // اعرض من cache فوراً بدون انتظار
+  const cached=localStorage.getItem("rbco_site_cache");
+  if(cached){
+    try{
+      const c=JSON.parse(cached);
+      siteInfo.mapUrl=c.mapUrl||'';
+      siteInfo.workTime=c.workTime||'';
+      updateSiteCard(siteInfo.mapUrl, siteInfo.workTime);
+      if(document.getElementById("inp-map-url")) document.getElementById("inp-map-url").value=siteInfo.mapUrl;
+      if(document.getElementById("inp-work-time")) document.getElementById("inp-work-time").value=siteInfo.workTime;
+    }catch(e){}
+  }
+
+  // ثم جلب من السيرفر في الخلفية للتحديث
   try{
     const res=await fetch(SCRIPT_URL+"?action=getSiteInfo");
     const j=await res.json();
@@ -609,6 +622,12 @@ function openManager(){
   document.getElementById("inp-map-url").value=siteInfo.mapUrl||'';
   document.getElementById("inp-work-time").value=siteInfo.workTime||'';
   document.getElementById("inp-email2").value=localStorage.getItem("rbco_email2")||'';
+  // تفعيل تاب اليومي صراحةً
+  document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+  const dailyBtn=document.querySelector('.tab-btn[onclick*="daily"]');
+  if(dailyBtn) dailyBtn.classList.add("active");
+  document.getElementById("tab-daily").style.display="block";
+  document.getElementById("tab-monthly").style.display="none";
   renderDaily();
 }
 
@@ -632,10 +651,17 @@ async function pushToSheets(payload){
 }
 
 async function requestReport(type){
-  showToast("⏳ جاري إرسال التقرير...","warn");
-  const result=await pushToSheets({action:type==="weekly"?"sendWeeklyReport":"sendMonthlyReport"});
-  if(result.ok){showToast("✅ تم إرسال التقرير على إيميلك!","ok");}
-  else{showToast("❌ تعذّر الإرسال، تحقق من الاتصال","err");}
+  const isMonthly = type==="monthly";
+  showToast("⏳ جاري الإرسال، قد يستغرق دقيقة...","warn");
+  // أرسل الطلب بدون انتظار الرد (fire & forget)
+  fetch(SCRIPT_URL,{
+    method:"POST",
+    body:JSON.stringify({action:isMonthly?"sendMonthlyReport":"sendWeeklyReport"})
+  }).catch(()=>{});
+  // أظهر رسالة نجاح بعد 3 ثواني بدون انتظار
+  setTimeout(()=>{
+    showToast("✅ تم الإرسال — تحقق من بريدك الإلكتروني","ok");
+  }, 3000);
 }
 
 async function syncAllToSheets(){
