@@ -1016,9 +1016,37 @@ async function renderMonthly(){
   document.getElementById("monthly-table").innerHTML=html+"</tbody></table>";
 }
 
-function exportExcel(){
+async function exportExcel(){
   const month=document.getElementById("monthly-month").value;if(!month)return;
-  const [y,mo]=month.split("-").map(Number),days=new Date(y,mo,0).getDate(),data=getData(),wb=XLSX.utils.book_new();
+  const [y,mo]=month.split("-").map(Number),days=new Date(y,mo,0).getDate();
+  const wb=XLSX.utils.book_new();
+
+  showToast("⏳ جاري تحميل البيانات من Sheets...","warn");
+
+  // جلب البيانات من Sheets
+  const rows=await fetchMonthFromSheets(month);
+  const map={};
+  if(rows&&rows.length>0){
+    rows.forEach(r=>{
+      if(!map[r.date])map[r.date]={};
+      map[r.date][r.name]=r;
+    });
+  } else {
+    // fallback من localStorage
+    const data=getData();
+    Object.keys(data).filter(d=>d.startsWith(month)).forEach(date=>{
+      const day=data[date]||{};
+      if(!map[date])map[date]={};
+      if(day.__nowork__) TEAM.forEach(m=>map[date][m.name]={status:'لا يوجد دوام',reason:day.__nowork__.reason||''});
+      else TEAM.forEach(m=>{
+        const r=day[m.id];
+        if(r&&r.status==='vacation') map[date][m.name]={status:'إجازة'};
+        else if(r&&r.time) map[date][m.name]={status:'حضر',time:r.time,city:r.city||'',lat:r.lat||'',lng:r.lng||''};
+      });
+    });
+  }
+
+  const today=todayStr();
 
   // ── شيت الملخص ──
   const summaryRows=[["الاسم",...Array.from({length:days},(_,i)=>String(i+1)),"حضر","إجازة","غائب","لا دوام"]];
@@ -1026,46 +1054,39 @@ function exportExcel(){
     let row=[m.name],p=0,vac=0,ab=0,nw=0;
     for(let d=1;d<=days;d++){
       const str=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-      const day=data[str]||{};
-      if(day.__nowork__){row.push("لا دوام");nw++;}
-      else if(data[str]&&data[str][m.id]&&data[str][m.id].status==="vacation"){row.push("إجازة");vac++;}
-      else if(data[str]&&data[str][m.id]&&data[str][m.id].time){row.push(data[str][m.id].time);p++;}
-      else{row.push("غائب");ab++;}
+      const r=map[str]&&map[str][m.name];
+      if(r&&r.status==='لا يوجد دوام'){row.push("لا دوام");nw++;}
+      else if(r&&r.status==='إجازة'){row.push("إجازة");vac++;}
+      else if(r&&r.status==='حضر'){row.push(r.time||"✓");p++;}
+      else if(r&&r.status==='غائب'){row.push("غائب");ab++;}
+      else if(str<today){row.push("غائب");ab++;}
+      else row.push("-");
     }
     row.push(p,vac,ab,nw);summaryRows.push(row);
   });
   const ws1=XLSX.utils.aoa_to_sheet(summaryRows);
-  // تنسيق الرأس
   ws1['!cols']=[{wch:18},...Array.from({length:days},()=>({wch:6})),{wch:6},{wch:6},{wch:6},{wch:6}];
   XLSX.utils.book_append_sheet(wb,ws1,"ملخص الشهر");
 
   // ── شيت التفاصيل — كل شخص بكتلة منفصلة ──
   const detailRows=[];
-  const allDates=Object.keys(data).filter(d=>d.startsWith(month)).sort();
+  const allDates=[];
+  for(let d=1;d<=days;d++){
+    const str=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    if(str<=today) allDates.push(str);
+  }
 
   TEAM.forEach((m,mi)=>{
-    // فراغ بين الأشخاص
     if(mi>0) detailRows.push([]);
-
-    // رأس الشخص
     detailRows.push([`👷 ${m.name}`,"","","",""]);
     detailRows.push(["التاريخ","الحالة","الوقت","المدينة / الحي","الإحداثيات"]);
-
     allDates.forEach(date=>{
-      const day=data[date]||{};
-      if(day.__nowork__){
-        detailRows.push([date,"لا يوجد دوام","","",day.__nowork__.reason||""]);
-      } else {
-        const r=day[m.id];
-        if(r&&r.status==="vacation") detailRows.push([date,"إجازة","","",""]);
-        else if(r&&r.time){
-          const cityLabel=[r.district||"",r.city||""].filter(Boolean).join("، ")||r.city||"";
-          const coords=r.lat&&r.lng?`${r.lat}, ${r.lng}`:"";
-          detailRows.push([date,"حضر",r.time,cityLabel,coords]);
-        } else {
-          detailRows.push([date,"غائب","","",""]);
-        }
-      }
+      const r=map[date]&&map[date][m.name];
+      if(r&&r.status==='لا يوجد دوام') detailRows.push([date,"لا يوجد دوام","","",r.reason||""]);
+      else if(r&&r.status==='إجازة') detailRows.push([date,"إجازة","","",""]);
+      else if(r&&r.status==='حضر') detailRows.push([date,"حضر",r.time||"",r.city||"",r.lat&&r.lng?`${r.lat}, ${r.lng}`:""]);
+      else if(r&&r.status==='غائب') detailRows.push([date,"غائب","","",""]);
+      else detailRows.push([date,"غائب","","",""]);
     });
   });
 
