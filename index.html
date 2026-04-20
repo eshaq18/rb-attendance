@@ -492,7 +492,7 @@ const TEAM=[
   {id:4,name:"اسحاق السيهاتي",color:"#2d4496",emoji:"👷"}
 ];
 const PIN = "059805";
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyoWyGr_gPANo7tHRzDnhQCU9-b2MOhruEP0clarfIl9jkBuBFo1nE7mFF5xp9JzrjhYA/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby738L--D-fiQ9cITmMVzyNuITP2k0-T4u6YzCFb9jNgq_l3ZBnOIz7ceh0u8YX7HFNUg/exec";
 
 // ═══ FIREBASE CONFIG ═══
 const FIREBASE_DB = "https://rb-attendance-2e9b3-default-rtdb.firebaseio.com";
@@ -508,20 +508,19 @@ async function getPhotoFromFirebase(date, memberId){
 let siteInfo = {mapUrl:'', workTime:''};
 
 async function loadSiteInfo(){
-  // فحص هل تم الحذف اليومي
-  const savedDate = localStorage.getItem("rbco_site_date");
   const today = todayStr();
-  if(savedDate !== today){
-    // يوم جديد → احذف المعلومات المحلية
+  const savedDate = localStorage.getItem("rbco_site_date");
+
+  // يوم جديد → احذف المعلومات من السيرفر وأظهر "لا توجد معلومات"
+  if(savedDate && savedDate !== today){
     localStorage.removeItem("rbco_site_date");
     localStorage.removeItem("rbco_site_cache");
-    // أرسل حذف للسيرفر
     pushToSheets({action:"saveSiteInfo", mapUrl:"", workTime:""}).catch(()=>{});
     updateSiteCard("","");
     return;
   }
 
-  // إذا نفس اليوم → جلب من السيرفر
+  // جلب من السيرفر دائماً (لأن الموظفين الآخرين يحتاجون يشوفون ما حفظه المدير)
   try{
     const res=await fetch(SCRIPT_URL+"?action=getSiteInfo");
     const j=await res.json();
@@ -642,15 +641,33 @@ async function requestReport(type){
 async function syncAllToSheets(){
   const data=getData();
   const rows=[];
+
   Object.keys(data).sort().forEach(date=>{
-    TEAM.forEach(m=>{
-      const r=data[date]&&data[date][m.id];
-      if(r) rows.push({date,name:m.name,time:r.time,lat:r.lat,lng:r.lng});
-    });
+    const day=data[date]||{};
+    if(day.__nowork__){
+      // يوم بلا دوام — يُضاف للكل
+      TEAM.forEach(m=>{
+        rows.push({date, name:m.name, status:'لا يوجد دوام', time:'', city:'', lat:'', lng:'', reason:day.__nowork__.reason||''});
+      });
+    } else {
+      TEAM.forEach(m=>{
+        const r=day[m.id];
+        if(r&&r.status==="vacation"){
+          rows.push({date, name:m.name, status:'إجازة', time:'', city:'', lat:'', lng:'', reason:''});
+        } else if(r&&r.time){
+          const cityLabel=[r.district||'',r.city||''].filter(Boolean).join('، ');
+          rows.push({date, name:m.name, status:'حضر', time:r.time, city:cityLabel, lat:r.lat||'', lng:r.lng||'', reason:''});
+        } else {
+          // غائب
+          rows.push({date, name:m.name, status:'غائب', time:'', city:'', lat:'', lng:'', reason:''});
+        }
+      });
+    }
   });
+
   if(rows.length===0){showToast("لا توجد بيانات للمزامنة","warn");return;}
-  showToast("⏳ جاري المزامنة...","warn");
-  const result=await pushToSheets({action:"syncAll",rows});
+  showToast(`⏳ جاري مزامنة ${rows.length} سجل...`,"warn");
+  const result=await pushToSheets({action:"syncAll", rows});
   if(result.ok){showToast(`✅ تمت مزامنة ${rows.length} سجل!`,"ok");}
   else{showToast("❌ فشلت المزامنة، تحقق من الاتصال","err");}
 }
@@ -720,13 +737,17 @@ function getLocation(){
     dot.className="status-dot dot-ok";txt.textContent="تم تحديد الموقع ✓";
     coords.textContent=`${lat}, ${lng} (±${loc.accuracy}م)`;
     updateBtn();
-    // تحديد المدينة تلقائياً
+    // تحديد المدينة والحي تلقائياً
     try{
       const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ar`);
       const j=await res.json();
-      const city=j.address?.city||j.address?.town||j.address?.county||j.address?.state||"";
+      const addr=j.address||{};
+      const city=addr.city||addr.town||addr.county||addr.state||"";
+      const district=addr.suburb||addr.neighbourhood||addr.quarter||addr.residential||"";
       loc.city=city;
-      if(city)coords.textContent=`📍 ${city} • ${lat}, ${lng}`;
+      loc.district=district;
+      const label=[district,city].filter(Boolean).join('، ');
+      if(label) coords.textContent=`📍 ${label} • ${lat}, ${lng}`;
     }catch(e){}
   },()=>{dot.className="status-dot dot-err";txt.textContent="تعذّر التحديد";loc={lat:"غير متاح",lng:"",city:"",accuracy:0};updateBtn();},{timeout:12000,enableHighAccuracy:true});
 }
@@ -743,7 +764,7 @@ async function submitCheckin(){
 
   // Save locally first
   const data=getData();if(!data[today])data[today]={};
-  data[today][sel]={time,timestamp:now.toISOString(),photo,lat:loc.lat,lng:loc.lng,accuracy:loc.accuracy,city:loc.city||""};
+  data[today][sel]={time,timestamp:now.toISOString(),photo,lat:loc.lat,lng:loc.lng,accuracy:loc.accuracy,city:loc.city||"",district:loc.district||""};
   saveData(data);
 
   // حفظ الصورة في Firebase
@@ -755,7 +776,9 @@ async function submitCheckin(){
   // Push to Google Sheets
   const result=await pushToSheets({
     action:"checkin",
-    date:today,name:m.name,time,city:loc.city||"",lat:loc.lat,lng:loc.lng
+    date:today,name:m.name,time,
+    city:[loc.district||"",loc.city||""].filter(Boolean).join('، '),
+    lat:loc.lat,lng:loc.lng
   });
 
   document.getElementById("sname").textContent=`${m.emoji} ${m.name}`;
@@ -931,11 +954,11 @@ async function renderDaily(){
         });
       }
     } else {
-      // #3 غائب مع علامة واضحة
+      // #2 غائب مع علامة واضحة + تسجيل في Sheets إذا اليوم انتهى
       c.className="att-card absent-card";
       c.innerHTML=`<div class="att-ph" style="background:#fef2f2;border-color:#fca5a5;color:#dc2626;font-size:1.3rem">❌</div><div class="att-info"><div class="att-name">${m.emoji} ${m.name}</div><div class="att-time" style="color:var(--danger);font-weight:800">غائب</div></div><span class="badge badge-a">غائب ❌</span><button class="vac-btn" onclick="setVacation(${m.id},'${date}')">🏖️ إجازة</button>`;
-      // #3 تسجيل الغياب في Sheets تلقائياً عند التحميل إذا كان اليوم قد مضى
-      if(date < todayStr()) pushToSheets({action:"absent",date,name:m.name}).catch(()=>{});
+      // تسجيل الغياب في Sheets لأي يوم (ماضي أو حالي)
+      pushToSheets({action:"absent",date,name:m.name}).catch(()=>{});
     }
     list.appendChild(c);
   });
@@ -991,40 +1014,60 @@ async function renderMonthly(){
 function exportExcel(){
   const month=document.getElementById("monthly-month").value;if(!month)return;
   const [y,mo]=month.split("-").map(Number),days=new Date(y,mo,0).getDate(),data=getData(),wb=XLSX.utils.book_new();
-  // ملخص
-  const rows=[["الاسم",...Array.from({length:days},(_,i)=>String(i+1)),"حضر","إجازة","غائب","لا دوام"]];
+
+  // ── شيت الملخص ──
+  const summaryRows=[["الاسم",...Array.from({length:days},(_,i)=>String(i+1)),"حضر","إجازة","غائب","لا دوام"]];
   TEAM.forEach(m=>{
     let row=[m.name],p=0,vac=0,ab=0,nw=0;
     for(let d=1;d<=days;d++){
       const str=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const day=data[str]||{};
-      const noWork=day.__nowork__;
-      const r=day[m.id];
-      if(noWork){row.push("لا دوام");nw++;}
-      else if(r&&r.status==="vacation"){row.push("إجازة");vac++;}
-      else if(r&&r.time){row.push(r.time);p++;}
-      else if(r&&r.status==="absent"){row.push("غائب");ab++;}
-      else{row.push("-");}
+      if(day.__nowork__){row.push("لا دوام");nw++;}
+      else if(data[str]&&data[str][m.id]&&data[str][m.id].status==="vacation"){row.push("إجازة");vac++;}
+      else if(data[str]&&data[str][m.id]&&data[str][m.id].time){row.push(data[str][m.id].time);p++;}
+      else{row.push("غائب");ab++;}
     }
-    row.push(p,vac,ab,nw);rows.push(row);
+    row.push(p,vac,ab,nw);summaryRows.push(row);
   });
-  // تفاصيل
-  const dr=[["الاسم","التاريخ","الحالة","الوقت","المدينة","خط العرض","خط الطول","ملاحظة"]];
-  Object.keys(data).filter(d=>d.startsWith(month)).sort().forEach(date=>{
-    const day=data[date]||{};
-    const noWork=day.__nowork__;
-    if(noWork){TEAM.forEach(m=>dr.push([m.name,date,"لا يوجد دوام","","","","",noWork.reason||""]));}
-    else{
-      TEAM.forEach(m=>{
+  const ws1=XLSX.utils.aoa_to_sheet(summaryRows);
+  // تنسيق الرأس
+  ws1['!cols']=[{wch:18},...Array.from({length:days},()=>({wch:6})),{wch:6},{wch:6},{wch:6},{wch:6}];
+  XLSX.utils.book_append_sheet(wb,ws1,"ملخص الشهر");
+
+  // ── شيت التفاصيل — كل شخص بكتلة منفصلة ──
+  const detailRows=[];
+  const allDates=Object.keys(data).filter(d=>d.startsWith(month)).sort();
+
+  TEAM.forEach((m,mi)=>{
+    // فراغ بين الأشخاص
+    if(mi>0) detailRows.push([]);
+
+    // رأس الشخص
+    detailRows.push([`👷 ${m.name}`,"","","",""]);
+    detailRows.push(["التاريخ","الحالة","الوقت","المدينة / الحي","الإحداثيات"]);
+
+    allDates.forEach(date=>{
+      const day=data[date]||{};
+      if(day.__nowork__){
+        detailRows.push([date,"لا يوجد دوام","","",day.__nowork__.reason||""]);
+      } else {
         const r=day[m.id];
-        if(r&&r.status==="vacation") dr.push([m.name,date,"إجازة","","","","",""]);
-        else if(r&&r.time) dr.push([m.name,date,"حضر",r.time,r.city||"",r.lat,r.lng,""]);
-        else dr.push([m.name,date,"غائب","","","","",""]);
-      });
-    }
+        if(r&&r.status==="vacation") detailRows.push([date,"إجازة","","",""]);
+        else if(r&&r.time){
+          const cityLabel=[r.district||"",r.city||""].filter(Boolean).join("، ")||r.city||"";
+          const coords=r.lat&&r.lng?`${r.lat}, ${r.lng}`:"";
+          detailRows.push([date,"حضر",r.time,cityLabel,coords]);
+        } else {
+          detailRows.push([date,"غائب","","",""]);
+        }
+      }
+    });
   });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),"ملخص الشهر");
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dr),"تفاصيل");
+
+  const ws2=XLSX.utils.aoa_to_sheet(detailRows);
+  ws2['!cols']=[{wch:14},{wch:14},{wch:10},{wch:24},{wch:22}];
+  XLSX.utils.book_append_sheet(wb,ws2,"تفاصيل");
+
   XLSX.writeFile(wb,`RBCo_حضور_${month}.xlsx`);
   showToast("✅ تم تصدير الملف!","ok");
 }
@@ -1115,15 +1158,16 @@ function countVacationDays(memberId, currentDate){
   return count;
 }
 
-// #6 بناء تفاصيل الموقع والوقت
+// بناء تفاصيل الموقع
 function buildLocDetail(r){
   const parts=[];
-  if(r.city) parts.push(`📍 ${r.city}`);
+  const cityLabel=[r.district||"",r.city||""].filter(Boolean).join("، ");
+  if(cityLabel) parts.push(`📍 ${cityLabel}`);
   if(r.lat&&r.lng){
     const mapsUrl=`https://maps.google.com/?q=${r.lat},${r.lng}`;
     parts.push(`<a href="${mapsUrl}" target="_blank" style="color:var(--blue2);text-decoration:none;font-size:.66rem">🗺️ ${r.lat}, ${r.lng}</a>`);
   }
-  if(r.accuracy) parts.push(`<span style="color:var(--muted);font-size:.66rem">دقة ±${r.accuracy}م</span>`);
+  if(r.accuracy) parts.push(`<span style="color:var(--muted);font-size:.66rem">±${r.accuracy}م</span>`);
   return parts.length?`<div class="att-loc">${parts.join(' • ')}</div>`:'';
 }
 
