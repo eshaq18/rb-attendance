@@ -492,7 +492,7 @@ const TEAM=[
   {id:4,name:"اسحاق السيهاتي",color:"#2d4496",emoji:"👷"}
 ];
 const PIN = "059805";
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby738L--D-fiQ9cITmMVzyNuITP2k0-T4u6YzCFb9jNgq_l3ZBnOIz7ceh0u8YX7HFNUg/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxCNioG6qVdAkcbu90dD0IYVTn2GARBo6fB9HTbbhLZ5fFNz_V0HHjmBbG1xs4D-jfo_A/exec";
 
 // ═══ FIREBASE CONFIG ═══
 const FIREBASE_DB = "https://rb-attendance-2e9b3-default-rtdb.firebaseio.com";
@@ -621,14 +621,14 @@ function openManager(){
   document.getElementById("monthly-month").value=todayStr().slice(0,7);
   document.getElementById("inp-map-url").value=siteInfo.mapUrl||'';
   document.getElementById("inp-work-time").value=siteInfo.workTime||'';
-  document.getElementById("inp-email2").value=localStorage.getItem("rbco_email2")||'';
   // تفعيل تاب اليومي صراحةً
   document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
   const dailyBtn=document.querySelector('.tab-btn[onclick*="daily"]');
   if(dailyBtn) dailyBtn.classList.add("active");
   document.getElementById("tab-daily").style.display="block";
   document.getElementById("tab-monthly").style.display="none";
-  renderDaily();
+  // تأخير بسيط حتى تظهر الصفحة أولاً ثم تحميل البيانات
+  setTimeout(()=>renderDaily(), 150);
 }
 
 // ═══ DATA ═══
@@ -1216,8 +1216,8 @@ function buildLocDetail(r){
   const cityLabel=[r.district||"",r.city||""].filter(Boolean).join("، ");
   if(cityLabel) parts.push(`📍 ${cityLabel}`);
   if(r.lat&&r.lng){
-    const mapsUrl=`https://maps.google.com/?q=${r.lat},${r.lng}`;
-    parts.push(`<a href="${mapsUrl}" target="_blank" style="color:var(--blue2);text-decoration:none;font-size:.66rem">🗺️ ${r.lat}, ${r.lng}</a>`);
+    const mapsUrl=`https://www.google.com/maps/search/?api=1&query=${r.lat},${r.lng}`;
+    parts.push(`<a href="${mapsUrl}" target="_blank" style="color:var(--blue2);text-decoration:none;font-size:.66rem">🗺️ افتح الموقع</a>`);
   }
   if(r.accuracy) parts.push(`<span style="color:var(--muted);font-size:.66rem">±${r.accuracy}م</span>`);
   return parts.length?`<div class="att-loc">${parts.join(' • ')}</div>`:'';
